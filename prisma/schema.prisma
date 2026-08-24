@@ -1,0 +1,70 @@
+// Idle Commander — Veritabanı Şeması
+// Her kullanıcının kendi izole dünyası var
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Kullanıcı ───────────────────────────────────────────────────────────────
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  world        World?   // Her kullanıcının 1 dünyası var
+
+  @@map("users")
+}
+
+// ─── Dünya (World) ───────────────────────────────────────────────────────────
+// Kullanıcının tüm oyun state'i JSON olarak burada saklanır.
+// tickWorld() her çalıştığında worldState güncellenir.
+model World {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Tüm oyun state'i tek bir JSON alanında — esneklik için
+  // EnemyBot[], EnemyClan[], GameMap, PlayerBase, DroppedLoot[] hepsi burada
+  worldState  Json
+
+  // Wipe bilgisi
+  wipeStartTime DateTime
+  wipeEndTime   DateTime
+
+  // Performans takibi
+  lastTickAt    DateTime @default(now())  // Son tick zamanı
+  lastActiveAt  DateTime @default(now())  // Son kullanıcı aktivitesi
+  tickCount     Int      @default(0)      // Toplam tick sayısı (debug için)
+
+  // Dünya uyku/uyanma
+  isSleeping    Boolean  @default(false)
+  sleepStartAt  DateTime?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("worlds")
+}
+
+// ─── Olay Kaydı ──────────────────────────────────────────────────────────────
+// Sunucuda gerçekleşen önemli olaylar — kullanıcı girince gösterilir
+model WorldEvent {
+  id          String   @id @default(cuid())
+  worldId     String
+  type        String   // "silent_raid", "bot_killed", "base_upgrade" vb.
+  description String
+  data        Json?    // Olay detayları (hasar miktarı, bot adı vb.)
+  occurredAt  DateTime @default(now())
+  seenByUser  Boolean  @default(false)
+
+  @@index([worldId, seenByUser])
+  @@map("world_events")
+}
