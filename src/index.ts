@@ -6,10 +6,12 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
+import websocket from "@fastify/websocket";
 import dotenv from "dotenv";
 
 import { authRoutes } from "./api/auth.routes";
 import { worldRoutes } from "./api/world.routes";
+import { wsRoutes } from "./api/ws.routes";
 import { worldManager } from "./world/WorldManager";
 
 dotenv.config();
@@ -34,6 +36,8 @@ async function bootstrap(): Promise<void> {
     secret: JWT_SECRET,
   });
 
+  await fastify.register(websocket);
+
   // ─── Health check ────────────────────────────────────────────────────────
   fastify.get("/health", async () => ({
     status: "ok",
@@ -45,6 +49,7 @@ async function bootstrap(): Promise<void> {
   // ─── Route'lar ───────────────────────────────────────────────────────────
   await fastify.register(authRoutes);
   await fastify.register(worldRoutes);
+  await fastify.register(wsRoutes);
 
   // ─── Sunucuyu başlat ─────────────────────────────────────────────────────
   await fastify.listen({ port: PORT, host: "0.0.0.0" });
