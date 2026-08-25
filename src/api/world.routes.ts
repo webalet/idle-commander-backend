@@ -132,11 +132,16 @@ export async function worldRoutes(fastify: FastifyInstance): Promise<void> {
   });
 
   // ─── POST /world/map ─────────────────────────────────────────────────────
-  // Client haritayı üretip buraya gönderir (ilk oyun açılışında)
+  // Client haritayı + klanları + botları üretip buraya gönderir (ilk açılışta)
+  // Sunucu bunları kaydeder, sonraki açılışlarda aynı veriyi döndürür
   fastify.post("/world/map", async (request, reply) => {
     const { userId } = request.user as JwtPayload;
 
-    const body = request.body as { map: unknown };
+    const body = request.body as {
+      map: unknown;
+      clans?: unknown;
+      bots?: unknown;
+    };
     if (!body?.map) {
       return reply.code(400).send({ error: "Harita verisi eksik." });
     }
@@ -144,12 +149,23 @@ export async function worldRoutes(fastify: FastifyInstance): Promise<void> {
     const loop = await worldManager.getOrCreate(userId);
     const state = loop.getState();
 
-    // Haritayı güncelle
-    loop.applyAction({
+    // Güncellenecek alanları topla
+    const updates: Record<string, unknown> = {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       map: body.map as any,
-    });
+    };
 
+    // Klanlar ve botlar geldiyse onları da kaydet
+    if (body.clans) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      updates.clans = body.clans as any;
+    }
+    if (body.bots) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      updates.bots = body.bots as any;
+    }
+
+    loop.applyAction(updates);
     loop.onUserActivity();
 
     return reply.send({ ok: true });

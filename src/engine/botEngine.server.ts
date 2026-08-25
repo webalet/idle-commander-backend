@@ -46,19 +46,53 @@ function dist(a: Position, b: Position): number {
   return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
 }
 
-// ─── Yardımcı: adım at ───────────────────────────────────────────────────────
+// ─── Yardımcı: nokta karada mı? (point-in-polygon) ────────────────────────────
+// Botlar suya yürümesin diye — landPolygon string'inden kontrol eder
+function isPointInLand(px: number, py: number, landPolygon: string): boolean {
+  if (!landPolygon) return true; // polygon yoksa her yer kara say
+  const pts = landPolygon.split(" ").map((p) => {
+    const [x, y] = p.split(",").map(Number);
+    return { x, y };
+  });
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const xi = pts[i].x, yi = pts[i].y;
+    const xj = pts[j].x, yj = pts[j].y;
+    const intersect = ((yi > py) !== (yj > py)) &&
+      (px < ((xj - xi) * (py - yi)) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+// ─── Yardımcı: adım at (kara kontrolü ile) ────────────────────────────────────
+// landPolygon verilirse, adım suya düşecekse hareket etme (olduğu yerde kal)
 function stepToward(
   from: Position,
   to: Position,
+  landPolygon?: string,
 ): { pos: Position; direction: number; arrived: boolean } {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const d = Math.sqrt(dx * dx + dy * dy);
   if (d <= BOT_STEP) {
+    // Varış — hedef karada mı kontrol et
+    if (landPolygon && !isPointInLand(to.x, to.y, landPolygon)) {
+      return { pos: from, direction: Math.atan2(dy, dx), arrived: false };
+    }
     return { pos: { ...to }, direction: Math.atan2(dy, dx), arrived: true };
   }
+  const nextPos = {
+    x: from.x + (dx / d) * BOT_STEP,
+    y: from.y + (dy / d) * BOT_STEP,
+  };
+  // Kara kontrolü — suya düşecekse hareket etme
+  if (landPolygon && !isPointInLand(nextPos.x, nextPos.y, landPolygon)) {
+    // Suya düşer — olduğu yerde kal, yönü hedefe çevir
+    return { pos: from, direction: Math.atan2(dy, dx), arrived: false };
+  }
   return {
-    pos: { x: from.x + (dx / d) * BOT_STEP, y: from.y + (dy / d) * BOT_STEP },
+    pos: nextPos,
     direction: Math.atan2(dy, dx),
     arrived: false,
   };
@@ -220,7 +254,7 @@ export function tickBot(
         changes = { ...changes, phase: "idle", patrolTarget: null, patrolStarted: null };
         break;
       }
-      const { pos, direction, arrived } = stepToward(bot.position, bot.patrolTarget);
+      const { pos, direction, arrived } = stepToward(bot.position, bot.patrolTarget, state.map.landPolygon);
       changes = { ...changes, position: pos, direction };
       if (arrived) {
         if (Math.random() < 0.4) {
@@ -237,7 +271,7 @@ export function tickBot(
         changes = { ...changes, phase: "idle" };
         break;
       }
-      const { pos, direction, arrived } = stepToward(bot.position, bot.targetRegionPosition);
+      const { pos, direction, arrived } = stepToward(bot.position, bot.targetRegionPosition, state.map.landPolygon);
       changes = { ...changes, position: pos, direction };
       if (arrived) {
         changes = { ...changes, phase: "farming", arrivedAt: now, lastLootTick: now };
@@ -277,7 +311,7 @@ export function tickBot(
     }
 
     case "moving_home": {
-      const { pos, direction, arrived } = stepToward(bot.position, basePos);
+      const { pos, direction, arrived } = stepToward(bot.position, basePos, state.map.landPolygon);
       changes = { ...changes, position: pos, direction };
       if (arrived) {
         changes = { ...changes, phase: "unloading", position: basePos, unloadStarted: now };
@@ -332,7 +366,7 @@ export function tickBot(
         x: bot.position.x + (Math.random() - 0.5) * 30,
         y: bot.position.y + (Math.random() - 0.5) * 30,
       };
-      const sw = stepToward(bot.position, wobble);
+      const sw = stepToward(bot.position, wobble, state.map.landPolygon);
       changes = { ...changes, position: sw.pos, direction: sw.direction };
       break;
     }
