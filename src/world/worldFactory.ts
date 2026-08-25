@@ -276,12 +276,15 @@ export function createInitialWorldState(userId: string): WorldState {
   };
 
   // 4-5 klan oluştur, her biri 2-5 bot
+  // Klan pozisyonlarını bölgelerin yakınına koy — suya düşmesinler
+  // (basit harita kara olduğu için bölge pozisyonları güvenli)
+  const regionPositions = map.regions.map((r) => r.position);
   const clanConfigs = [
-    { botCount: 2, pos: randPos() },
-    { botCount: 3, pos: randPos() },
-    { botCount: 4, pos: randPos() },
-    { botCount: 5, pos: randPos() },
-    { botCount: 2, pos: randPos() },
+    { botCount: 2, pos: regionPositions[0] ?? randPos() },
+    { botCount: 3, pos: regionPositions[1] ?? randPos() },
+    { botCount: 4, pos: regionPositions[2] ?? randPos() },
+    { botCount: 5, pos: regionPositions[3] ?? randPos() },
+    { botCount: 2, pos: regionPositions[4] ?? randPos() },
   ];
 
   const allClans: EnemyClan[] = [];
