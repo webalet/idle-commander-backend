@@ -131,6 +131,35 @@ export async function worldRoutes(fastify: FastifyInstance): Promise<void> {
     return reply.send({ events });
   });
 
+  // ─── POST /world/sync ─────────────────────────────────────────────────────
+  // Client periyodik olarak bot/clan state'ini gönderir, sunucu kaydeder
+  // Bu sayede oyunu kapatınca client'taki son state sunucuda kalır
+  fastify.post("/world/sync", async (request, reply) => {
+    const { userId } = request.user as JwtPayload;
+
+    const body = request.body as {
+      bots?: unknown;
+      clans?: unknown;
+      player?: unknown;
+      base?: unknown;
+    };
+
+    const loop = await worldManager.getOrCreate(userId);
+
+    const updates: Record<string, unknown> = {};
+    if (body.bots) updates.bots = body.bots;
+    if (body.clans) updates.clans = body.clans;
+    if (body.player) updates.player = body.player;
+    if (body.base) updates.base = body.base;
+
+    if (Object.keys(updates).length > 0) {
+      loop.applyAction(updates);
+      loop.onUserActivity();
+    }
+
+    return reply.send({ ok: true });
+  });
+
   // ─── POST /world/map ─────────────────────────────────────────────────────
   // Client haritayı + klanları + botları üretip buraya gönderir (ilk açılışta)
   // Sunucu bunları kaydeder, sonraki açılışlarda aynı veriyi döndürür
