@@ -27,7 +27,9 @@ const PATROL_DURATION_MS = 15000;
 const FLEE_RANGE = GRID_SIZE * 3;
 const CHASE_RANGE = GRID_SIZE * 2;
 const COMBAT_GRID_RANGE = GRID_SIZE * 1.5;
-const BOT_STEP = 4; // px per tick
+// Bot adım boyutu — komutanla benzer hız (~7.5px/sn)
+// Tick 1s, adım 8px = 8px/sn
+const BOT_STEP = 8;
 
 // ─── Çıktı tipleri ────────────────────────────────────────────────────────────
 export interface BotUpdate {
@@ -181,11 +183,10 @@ function rollLoot(regionType: string): InventorySlot | null {
 }
 
 // ─── Bot öncelik sistemi — düşük MS = daha sık tick ──────────────────────────
-function getBotTickInterval(bot: EnemyBot): number {
-  if (bot.phase === "chasing_player" || bot.phase === "fleeing") return 200;   // 200ms
-  if (bot.phase === "farming" || bot.phase === "patrol") return 2000;          // 2s
-  if (bot.phase === "idle" || bot.phase === "unloading") return 5000;          // 5s
-  return 1000; // diğer fazlar 1s
+// Tüm fazlar 1s — komutanla benzer hızda smooth hareket
+// Client interpolasyonu zaten smooth yapıyor, sunucu sadece hedef verir
+function getBotTickInterval(_bot: EnemyBot): number {
+  return 1000; // 1s — tüm fazlar eşit
 }
 
 // ─── Tek bot tick ─────────────────────────────────────────────────────────────
