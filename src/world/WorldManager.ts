@@ -38,8 +38,14 @@ export class WorldManager {
       const state = world.worldState as unknown as WorldState;
       const loop = new WorldLoop(world.id, userId, state);
 
-      // Uyku modundaysa lazy sim ile güncelle
-      if (world.isSleeping && world.lastTickAt) {
+      // Lazy sim: son tick'ten bu yana uzun süre geçmişse simüle et
+      // isSleeping flag'ine bakma — sunucu restart olursa flag güncel olmaz
+      const lastTick = state.lastTickAt ?? 0;
+      const elapsed = Date.now() - lastTick;
+      const STALE_THRESHOLD = 5 * 60 * 1000; // 5 dk'dan fazla geçmişse simüle et
+
+      if (elapsed > STALE_THRESHOLD) {
+        console.log(`[WorldManager] Stale world — lazy sim başlıyor (elapsed: ${Math.round(elapsed/1000)}s)`);
         await loop.wakeUp();
       } else {
         loop.start();

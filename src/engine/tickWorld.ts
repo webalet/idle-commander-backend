@@ -124,8 +124,9 @@ export function lazySimulate(state: WorldState, nowMs: number): WorldState {
 
   let current = deepClone(state);
 
-  // Çok fazla tick varsa kısalt — max 720 tick (1 saatlik)
-  const maxTicks = Math.min(tickCount, 720);
+  // Çok fazla tick varsa kısalt — max 2000 tick (~2.7 saatlik sim)
+  // 2 gün offline = 34560 tick, ama 2000 tick yeterli ilerleme sağlar
+  const maxTicks = Math.min(tickCount, 2000);
 
   for (let i = 0; i < maxTicks; i++) {
     const simNow = state.lastTickAt + (i + 1) * TICK_INTERVAL;
