@@ -93,6 +93,7 @@ export interface BotEquipment {
   head: ItemDefinition | null;
   body: ItemDefinition | null;
   feet: ItemDefinition | null;
+  tool: ItemDefinition | null;   // FAZ 3.2 — gather aleti
 }
 
 // ─── Bot Phase & Personality ─────────────────────────────────────────────────
@@ -100,9 +101,12 @@ export type EnemyBotPhase =
   | "idle" | "patrol" | "moving_to_region" | "farming"
   | "moving_home" | "loot_pickup" | "fleeing" | "fleeing_to_hide"
   | "hiding" | "chasing_player" | "responding_to_help"
-  | "searching" | "unloading" | "dead";
+  | "searching" | "unloading" | "bot_vs_bot" | "raiding" | "dead";
 
 export type BotPersonality = "aggressive" | "coward" | "neutral";
+
+// FAZ 3.2 — Bot rolü (karakter derinliği)
+export type BotRole = "fighter" | "farmer" | "coward" | "guard";
 
 // ─── EnemyBot ─────────────────────────────────────────────────────────────────
 export interface EnemyBot {
@@ -114,6 +118,9 @@ export interface EnemyBot {
   hp: number;
   maxHp: number;
   personality: BotPersonality;
+  role: BotRole;                    // FAZ 3.2 — bot rolü
+  raidTargetClanId: string | null;  // FAZ 3.2 — raid hedefi
+  raidTargetPosition: Position | null;
   phase: EnemyBotPhase;
   targetRegionId: string | null;
   targetRegionPosition: Position | null;
@@ -146,6 +153,9 @@ export interface EnemyBot {
   lastTickedAt: number;
 }
 
+// ─── Klan Eğilimi (offline evrim için) ────────────────────────────────────────
+export type ClanTendency = "builder" | "farmer" | "balanced";
+
 // ─── Clan Base ────────────────────────────────────────────────────────────────
 export interface ClanBase {
   id: string;
@@ -154,6 +164,8 @@ export interface ClanBase {
   hp: number;
   maxHp: number;
   storage: InventorySlot[];
+  tier: 1 | 2 | 3 | 4 | 5;       // Klan base tier'ı (offline evrim)
+  destroyed?: boolean;            // Yıkıldı mı (kurukafa gösterimi)
 }
 
 // ─── Enemy Clan ───────────────────────────────────────────────────────────────
@@ -163,4 +175,5 @@ export interface EnemyClan {
   color: string;
   base: ClanBase;
   botIds: string[];
+  tendency?: ClanTendency;        // Klan eğilimi (builder/farmer/balanced)
 }

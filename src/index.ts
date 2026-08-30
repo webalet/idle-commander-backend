@@ -46,6 +46,47 @@ async function bootstrap(): Promise<void> {
     uptime: process.uptime(),
   }));
 
+  // ─── Admin: Veritabanını sıfırla (tüm kullanıcılar + dünyalar) ────────────
+  // Korumalı: ADMIN_SECRET env değişkeni ile. Railway'de set et.
+  // Çağrı: POST /admin/wipe  body: { "secret": "..." } veya { "ADMIN_SECRET": "..." }
+  fastify.post("/admin/wipe", async (request, reply) => {
+    const adminSecret = process.env.ADMIN_SECRET;
+    if (!adminSecret) {
+      return reply.code(503).send({ error: "ADMIN_SECRET env tanımlı değil — Railway Variables'tan ekle" });
+    }
+    const body = request.body as { secret?: string; ADMIN_SECRET?: string } | null;
+    const provided = body?.secret ?? body?.ADMIN_SECRET;
+    if (!provided || provided !== adminSecret) {
+      return reply.code(403).send({ error: "Yetkisiz — secret yanlış" });
+    }
+
+    try {
+      const { PrismaClient } = await import("@prisma/client");
+      const prisma = new PrismaClient();
+
+      const deletedEvents = await prisma.worldEvent.deleteMany({});
+      const deletedWorlds = await prisma.world.deleteMany({});
+      const deletedUsers = await prisma.user.deleteMany({});
+
+      await prisma.$disconnect();
+
+      // Aktif dünyaları bellekten de temizle
+      await worldManager.shutdownAll();
+
+      return {
+        success: true,
+        deleted: {
+          events: deletedEvents.count,
+          worlds: deletedWorlds.count,
+          users: deletedUsers.count,
+        },
+      };
+    } catch (err) {
+      request.log.error(err);
+      return reply.code(500).send({ error: "Sıfırlama hatası", detail: String(err) });
+    }
+  });
+
   // ─── Route'lar ───────────────────────────────────────────────────────────
   await fastify.register(authRoutes);
   await fastify.register(worldRoutes);

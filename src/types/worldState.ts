@@ -35,6 +35,7 @@ export interface ServerPlayer {
     head: ItemDefinition | null;
     body: ItemDefinition | null;
     feet: ItemDefinition | null;
+    tool: ItemDefinition | null;   // FAZ 3.2 — gather aleti (testere/hilti vb.)
   };
   status: string;
   bedPosition: { x: number; y: number } | null;

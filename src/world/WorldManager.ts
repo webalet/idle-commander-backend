@@ -10,6 +10,7 @@ import { PrismaClient } from "@prisma/client";
 import { WorldLoop } from "./WorldLoop";
 import { WorldState } from "../types/worldState";
 import { createInitialWorldState } from "./worldFactory";
+import { simulateOfflineEvolution } from "../engine/offlineSimulation";
 
 const prisma = new PrismaClient();
 
@@ -35,17 +36,53 @@ export class WorldManager {
 
     if (world) {
       // Mevcut dünyayı yükle
-      const state = world.worldState as unknown as WorldState;
-      const loop = new WorldLoop(world.id, userId, state);
+      let state = world.worldState as unknown as WorldState;
 
-      // Lazy sim: son tick'ten bu yana uzun süre geçmişse simüle et
-      // isSleeping flag'ine bakma — sunucu restart olursa flag güncel olmaz
+      // FAZ 3.1 — Offline klan evrimi simülasyonu
+      // Son tick'ten bu yana uzun süre geçmişse istatistiksel sim çalıştır
       const lastTick = state.lastTickAt ?? 0;
       const elapsed = Date.now() - lastTick;
       const STALE_THRESHOLD = 5 * 60 * 1000; // 5 dk'dan fazla geçmişse simüle et
 
       if (elapsed > STALE_THRESHOLD) {
-        console.log(`[WorldManager] Stale world — lazy sim başlıyor (elapsed: ${Math.round(elapsed/1000)}s)`);
+        console.log(`[WorldManager] Stale world — offline evrim sim başlıyor (elapsed: ${Math.round(elapsed/1000)}s)`);
+        const result = simulateOfflineEvolution(state, Date.now());
+        state = result.newState;
+
+        // Olayları DB'ye kaydet (WorldEvent tablosu)
+        if (result.events.length > 0) {
+          try {
+            await prisma.worldEvent.createMany({
+              data: result.events.map(ev => ({
+                worldId: world.id,
+                type: ev.type,
+                description: ev.description,
+                data: (ev.data ?? undefined) as object | undefined,
+                seenByUser: false,
+              })) as any,
+            });
+          } catch (err) {
+            console.error("[WorldManager] Event kayıt hatası:", err);
+          }
+        }
+
+        // Wipe olduysa DB'yi güncelle
+        if (result.wiped) {
+          await prisma.world.update({
+            where: { id: world.id },
+            data: {
+              worldState: state as object,
+              lastTickAt: new Date(state.lastTickAt),
+              wipeStartTime: new Date(state.wipeStartTime),
+              wipeEndTime: new Date(state.wipeEndTime),
+            },
+          });
+        }
+      }
+
+      const loop = new WorldLoop(world.id, userId, state);
+
+      if (elapsed > STALE_THRESHOLD) {
         await loop.wakeUp();
       } else {
         loop.start();

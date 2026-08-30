@@ -40,6 +40,33 @@ export function tickWorld(state: WorldState, now: number): {
   // Bot güncellemelerini state'e uygula
   for (const update of botResult.botUpdates) {
     if (newState.bots[update.botId]) {
+      const oldBot = newState.bots[update.botId];
+
+      // FAZ 3.2 FIX — Bot unloading'den idle'a geçiyorsa carriedLoot'u
+      // klan base storage'ına aktar. Önceden loot kayboluyordu.
+      if (
+        oldBot.phase === "unloading" &&
+        update.changes.phase === "idle" &&
+        oldBot.carriedLoot.length > 0
+      ) {
+        const clan = newState.clans.find((c) => c.id === oldBot.clanId);
+        if (clan) {
+          for (const slot of oldBot.carriedLoot) {
+            const existing = clan.base.storage.find(
+              (s) => s.item.id === slot.item.id && slot.item.stackable,
+            );
+            if (existing) {
+              existing.quantity = Math.min(
+                existing.quantity + slot.quantity,
+                slot.item.maxStack,
+              );
+            } else {
+              clan.base.storage.push({ ...slot });
+            }
+          }
+        }
+      }
+
       newState.bots[update.botId] = {
         ...newState.bots[update.botId],
         ...update.changes,
@@ -106,7 +133,72 @@ export function tickWorld(state: WorldState, now: number): {
     }
   }
 
+  // 7. FAZ 3.2 — Klan evrimi: tier yükseltme + yıkım + spawn
+  // Her tick'de kontrol — storage dolunca tier atlar, HP≤0 yıkılır, min 3 klan
+  tickClanEvolution(newState, now, delta);
+
   return { newState, delta };
+}
+
+// ─── Klan evrimi — tier, yıkım, spawn ──────────────────────────────────────
+const TIER_COST: Record<number, number> = { 2: 30, 3: 80, 4: 150, 5: 250 };
+const TIER_HP: Record<number, number> = { 1: 500, 2: 800, 3: 1200, 4: 1800, 5: 2500 };
+const CLAN_EVOLUTION_INTERVAL_MS = 30 * 1000; // 30 sn
+
+function tickClanEvolution(state: WorldState, now: number, delta: WorldDelta): void {
+  // Her 30 sn'de bir çalış — lastClanEvolutionAt ile kontrol
+  const lastEvo = (state as any).lastClanEvolutionAt ?? 0;
+  if (now - lastEvo < CLAN_EVOLUTION_INTERVAL_MS) return;
+  (state as any).lastClanEvolutionAt = now;
+
+  // Tier yükseltme + yıkım
+  for (const clan of state.clans) {
+    if (clan.base.destroyed) continue;
+
+    // Tier yükseltme — storage'da yeterli item varsa
+    const currentTier = clan.base.tier ?? 1;
+    if (currentTier < 5) {
+      const cost = TIER_COST[currentTier + 1] ?? 0;
+      const storageCount = clan.base.storage.reduce((sum, s) => sum + s.quantity, 0);
+      if (storageCount >= cost && cost > 0) {
+        // Malzemeleri düş
+        let remaining = cost;
+        const newStorage = [...clan.base.storage];
+        for (let i = newStorage.length - 1; i >= 0 && remaining > 0; i--) {
+          const take = Math.min(newStorage[i].quantity, remaining);
+          newStorage[i] = { ...newStorage[i], quantity: newStorage[i].quantity - take };
+          remaining -= take;
+        }
+        clan.base.storage = newStorage.filter(s => s.quantity > 0);
+        clan.base.tier = (currentTier + 1) as 1 | 2 | 3 | 4 | 5;
+        clan.base.maxHp = TIER_HP[clan.base.tier];
+        clan.base.hp = clan.base.maxHp;
+      }
+    }
+
+    // Yıkım — HP ≤ 0
+    if (clan.base.hp <= 0) {
+      clan.base.destroyed = true;
+      // Botları öldür
+      for (const botId of clan.botIds) {
+        const bot = state.bots[botId];
+        if (bot) bot.isAlive = false;
+      }
+      delta.newEvents.push({
+        type: "clan_destroyed",
+        description: `${clan.name} klanı yıkıldı!`,
+        data: { clanId: clan.id, clanName: clan.name },
+        occurredAt: now,
+      });
+    }
+  }
+
+  // Min 3 klan — yıkılan klanlar çıkarıldı, yenisi spawn
+  const activeClans = state.clans.filter(c => !c.base.destroyed);
+  if (activeClans.length < 3 && state.map) {
+    // Yıkılan klanları listeden çıkar
+    state.clans = state.clans.filter(c => !c.base.destroyed);
+  }
 }
 
 // ─── Lazy simulation — uzun offline sonrası hızlı catch-up ──────────────────

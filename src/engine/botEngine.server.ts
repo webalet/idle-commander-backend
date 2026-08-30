@@ -22,11 +22,12 @@ import { WorldState, ServerDroppedLoot } from "../types/worldState";
 
 // ─── Sabitler ─────────────────────────────────────────────────────────────────
 const GRID_SIZE = 150;
-const LOOT_TICK_MS = 8000;
+const LOOT_TICK_MS = 3000;       // Client'la aynı — 3sn'de bir loot
 const PATROL_DURATION_MS = 15000;
-const FLEE_RANGE = GRID_SIZE * 3;
-const CHASE_RANGE = GRID_SIZE * 2;
-const COMBAT_GRID_RANGE = GRID_SIZE * 1.5;
+const FLEE_RANGE = 60;           // FAZ 3.2 — çeyrek grid'e düşürüldü
+const CHASE_RANGE = 50;          // FAZ 3.2 — yan yana gelince savaş
+const COMBAT_GRID_RANGE = 40;    // FAZ 3.2 — görüş menzili ~çeyrek grid
+const SAFE_BASE_RADIUS = 200;    // FAZ 3.2 — barınak güvenli bölge
 // Bot adım boyutu — komutanla benzer hız (~7.5px/sn)
 // Tick 1s, adım 8px = 8px/sn
 const BOT_STEP = 8;

@@ -8,7 +8,8 @@
 
 import { PrismaClient } from "@prisma/client";
 import { WorldState } from "../types/worldState";
-import { tickWorld, lazySimulate } from "../engine/tickWorld";
+import { tickWorld } from "../engine/tickWorld";
+import { simulateOfflineEvolution } from "../engine/offlineSimulation";
 
 const prisma = new PrismaClient();
 
@@ -73,10 +74,37 @@ export class WorldLoop {
     const world = await prisma.world.findUnique({ where: { id: this.worldId } });
     if (world) {
       const savedState = world.worldState as unknown as WorldState;
-      // Lazy sim: uyuduğu süreyi simüle et
-      console.log(`[WorldLoop] Lazy sim başlıyor — userId: ${this.userId}`);
-      this.state = lazySimulate(savedState, Date.now());
-      console.log(`[WorldLoop] Lazy sim tamamlandı — userId: ${this.userId}`);
+      // FAZ 3.2 — Offline evrim simülasyonu (klan tier, savaş, yıkım, spawn)
+      // lazySimulate yerine simulateOfflineEvolution — klan gelişimi için
+      console.log(`[WorldLoop] Offline evrim sim başlıyor — userId: ${this.userId}`);
+      const result = simulateOfflineEvolution(savedState, Date.now());
+      this.state = result.newState;
+      console.log(`[WorldLoop] Offline evrim tamamlandı — userId: ${this.userId}`);
+
+      // Olayları DB'ye kaydet
+      if (result.events.length > 0) {
+        try {
+          await prisma.worldEvent.createMany({
+            data: result.events.map(ev => ({
+              worldId: this.worldId,
+              type: ev.type,
+              description: ev.description,
+              data: (ev.data ?? undefined) as object | undefined,
+              seenByUser: false,
+            })) as any,
+          });
+        } catch (err) {
+          console.error(`[WorldLoop] Event kayıt hatası:`, err);
+        }
+      }
+
+      // Wipe olduysa DB'yi güncelle
+      if (result.wiped) {
+        await prisma.world.update({
+          where: { id: this.worldId },
+          data: { worldState: this.state as object },
+        });
+      }
     }
 
     this.start();

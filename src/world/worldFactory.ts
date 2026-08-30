@@ -14,6 +14,7 @@ import {
   MapRegion,
   Position,
   BotPersonality,
+  BotRole,
 } from "../types/gameModels";
 
 const MAP_WIDTH = 3000;
@@ -167,6 +168,10 @@ function createBot(
     y: basePos.y + Math.sin(angle) * radius,
   };
 
+  // FAZ 3.2 — rastgele rol
+  const roleRoll = Math.random();
+  const botRole: BotRole = roleRoll < 0.35 ? "fighter" : roleRoll < 0.60 ? "farmer" : roleRoll < 0.85 ? "coward" : "guard";
+
   return {
     id,
     name: BOT_NAMES[index % BOT_NAMES.length],
@@ -176,6 +181,9 @@ function createBot(
     hp: 100,
     maxHp: 100,
     personality: PERSONALITIES[Math.floor(Math.random() * PERSONALITIES.length)],
+    role: botRole,
+    raidTargetClanId: null,
+    raidTargetPosition: null,
     phase: "idle",
     targetRegionId: null,
     targetRegionPosition: null,
@@ -191,7 +199,7 @@ function createBot(
     chaseStarted: null,
     hitStunUntil: null,
     carriedLoot: [],
-    equipment: { weapon: null, head: null, body: null, feet: null },
+    equipment: { weapon: null, head: null, body: null, feet: null, tool: null },
     healCooldowns: { bandaj: 0, medical_siringa: 0, buyuk_medkit: 0 },
     targetLootId: null,
     targetLootPosition: null,
@@ -202,6 +210,14 @@ function createBot(
     isAlive: true,
     lastTickedAt: now,
   };
+}
+
+// ─── Klan eğilimi ataması ─────────────────────────────────────────────────────
+function randomTendency(): "builder" | "farmer" | "balanced" {
+  const r = Math.random();
+  if (r < 0.30) return "builder";
+  if (r < 0.70) return "farmer";
+  return "balanced";
 }
 
 // ─── Klan oluştur ─────────────────────────────────────────────────────────────
@@ -221,6 +237,7 @@ function createClan(
     id: clanId,
     name: CLAN_NAMES[nameIndex % CLAN_NAMES.length],
     color: `hsl(${(nameIndex * 60) % 360}, 70%, 50%)`,
+    tendency: randomTendency(),
     base: {
       id: uid("clanbase"),
       clanId,
@@ -228,6 +245,8 @@ function createClan(
       hp: 500,
       maxHp: 500,
       storage: [],
+      tier: 1,
+      destroyed: false,
     },
     botIds: bots.map((b) => b.id),
   };
@@ -258,7 +277,7 @@ export function createInitialWorldState(userId: string): WorldState {
       survival: 1, carrying: 1, awareness: 1,
     },
     inventory: { slots: [], maxSlots: 24 },
-    equipment: { weapon: null, head: null, body: null, feet: null },
+    equipment: { weapon: null, head: null, body: null, feet: null, tool: null },
     status: "idle",
     bedPosition: null,
   };

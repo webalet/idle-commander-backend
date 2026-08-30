@@ -32,7 +32,21 @@ const actionSchema = z.object({
 
 export async function worldRoutes(fastify: FastifyInstance): Promise<void> {
   // Tüm /world route'ları JWT gerektiriyor
+  // İSTİSNA: /world/sync?beacon=TOKEN — sendBeacon header gönderemediği için
+  // token query'de gelir, manuel doğrulanır (sayfa kapanışı kaydı için)
   fastify.addHook("onRequest", async (request, reply) => {
+    // Beacon isteği mi? Query'de beacon token varsa manuel doğrula
+    const beaconToken = (request.query as { beacon?: string } | null)?.beacon;
+    if (beaconToken && request.url.startsWith("/world/sync")) {
+      try {
+        const payload = fastify.jwt.verify(beaconToken) as JwtPayload;
+        (request as { user: JwtPayload }).user = payload;
+        return; // Doğrulandı — hook'tan çık
+      } catch {
+        return reply.code(401).send({ error: "Giriş yapmanız gerekiyor." });
+      }
+    }
+
     try {
       await request.jwtVerify();
     } catch {
