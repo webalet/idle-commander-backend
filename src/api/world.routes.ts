@@ -159,11 +159,18 @@ export async function worldRoutes(fastify: FastifyInstance): Promise<void> {
     };
 
     const loop = await worldManager.getOrCreate(userId);
+    const currentState = loop.getState();
 
     const updates: Record<string, unknown> = {};
     if (body.bots) updates.bots = body.bots;
     if (body.clans) updates.clans = body.clans;
-    if (body.player) updates.player = body.player;
+    // Player'ı tamamen değiştirme — MERGE et.
+    // Client kısmi player gönderir (position, hp, inventory, equipment, skills).
+    // direction, bedPosition, bodyZoneHp gibi alanlar kaybolmasın diye mevcut
+    // state ile birleştir.
+    if (body.player) {
+      updates.player = { ...currentState.player, ...(body.player as object) };
+    }
     if (body.base) updates.base = body.base;
 
     if (Object.keys(updates).length > 0) {
